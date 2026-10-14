@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account Inquiries & Balances — Enterprise Digital Banking</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <header class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
+    <div class="flex items-center space-x-6">
+      <a href="/index.html" class="flex items-center space-x-2">
+        <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold">DB</div>
+        <span class="font-bold text-lg text-slate-900">Digital Banking</span>
+      </a>
+      <nav class="hidden md:flex space-x-4">
+        <a href="/pages/dashboard.html" class="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900">Dashboard</a>
+        <a href="/pages/account-details.html" class="px-3 py-2 text-sm font-semibold text-blue-600 border-b-2 border-blue-600">Accounts</a>
+        <a href="/pages/fund-transfer.html" class="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900">Transfers</a>
+        <a href="/pages/card-management.html" class="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900">Cards</a>
+      </nav>
+    </div>
+    <div class="flex items-center space-x-4">
+      <span class="text-sm font-medium text-slate-700">Jane Doe (Executive)</span>
+      <a href="/pages/login.html" class="text-xs text-red-600 hover:underline">Sign Out</a>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-8">
+    <div class="flex justify-between items-center mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">Account Details & Inquiries</h1>
+        <p class="text-sm text-slate-500">Real-Time Account Balance and Transaction History (REQ-F-005)</p>
+      </div>
+      <div class="flex space-x-3">
+        <button id="btn-download-statement" onclick="downloadStatement()" class="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm flex items-center gap-2">
+          <span>📥</span> Download Statement
+        </button>
+      </div>
+    </div>
+
+    <!-- Account Selector Bar -->
+    <div class="bg-white p-4 rounded-xl border border-slate-200 mb-6 flex items-center gap-4">
+      <label for="account-select" class="text-sm font-semibold text-slate-700">Select Account:</label>
+      <select id="account-select" onchange="changeSelectedAccount()" class="form-control max-w-md">
+        <!-- Rendered dynamically -->
+      </select>
+    </div>
+
+    <!-- Active Account Details Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Available Balance</span>
+        <div id="acc-avail-balance" class="text-3xl font-extrabold text-blue-600 mt-2">$0.00</div>
+        <p class="text-xs text-slate-500 mt-1">Available for immediate withdrawal/transfer</p>
+      </div>
+
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ledger Balance</span>
+        <div id="acc-ledger-balance" class="text-3xl font-extrabold text-slate-900 mt-2">$0.00</div>
+        <p class="text-xs text-slate-500 mt-1">Total posted balance on record</p>
+      </div>
+
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Account Metadata</span>
+        <div id="acc-meta-type" class="text-lg font-bold text-slate-800 mt-2">Checking</div>
+        <p id="acc-meta-num" class="text-xs text-slate-500 mt-1">1002-4820-9912 • USD</p>
+      </div>
+    </div>
+
+    <!-- Transaction History Table -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+      <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+        <h2 class="text-lg font-bold text-slate-900">Transaction History</h2>
+        <span class="text-xs bg-slate-100 text-slate-700 px-3 py-1 rounded-full font-medium">Real-Time Query</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase bg-slate-50">
+              <th class="p-4">Date</th>
+              <th class="p-4">Description</th>
+              <th class="p-4">Type</th>
+              <th class="p-4">Amount</th>
+              <th class="p-4">Running Balance</th>
+              <th class="p-4">Status</th>
+            </tr>
+          </thead>
+          <tbody id="tx-table-body" class="divide-y divide-slate-100 text-sm">
+            <tr><td colspan="6" class="p-4 text-center text-slate-500">Loading transactions...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    let currentAccountId = null;
+
+    async function initAccountsPage() {
+      try {
+        const data = await BankingAPI.getAccounts();
+        const select = document.getElementById('account-select');
+        select.innerHTML = data.accounts.map(acc => `
+          <option value="${acc.id}">${acc.account_name} (${acc.account_number})</option>
+        `).join('');
+
+        if (data.accounts.length > 0) {
+          currentAccountId = data.accounts[0].id;
+          await loadAccountDetails(currentAccountId);
+        }
+      } catch (err) {
+        showNotice(err.message, true);
+      }
+    }
+
+    async function changeSelectedAccount() {
+      currentAccountId = document.getElementById('account-select').value;
+      await loadAccountDetails(currentAccountId);
+    }
+
+    async function loadAccountDetails(accId) {
+      try {
+        const acc = await BankingAPI.getAccountDetail(accId);
+        document.getElementById('acc-avail-balance').textContent = formatCurrency(acc.available_balance);
+        document.getElementById('acc-ledger-balance').textContent = formatCurrency(acc.ledger_balance);
+        document.getElementById('acc-meta-type').textContent = acc.account_type + ' (' + acc.status + ')';
+        document.getElementById('acc-meta-num').textContent = acc.account_number + ' • ' + acc.currency;
+
+        const txData = await BankingAPI.getAccountTransactions(accId);
+        const tbody = document.getElementById('tx-table-body');
+        if (txData.transactions && txData.transactions.length > 0) {
+          tbody.innerHTML = txData.transactions.map(tx => `
+            <tr class="hover:bg-slate-50">
+              <td class="p-4 text-slate-600">${tx.date}</td>
+              <td class="p-4 font-medium text-slate-900">${tx.description}</td>
+              <td class="p-4"><span class="px-2 py-1 rounded text-xs font-semibold ${tx.type === 'CREDIT' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">${tx.type}</span></td>
+              <td class="p-4 font-bold ${tx.amount > 0 ? 'text-emerald-600' : 'text-slate-900'}">${formatCurrency(tx.amount)}</td>
+              <td class="p-4 text-slate-600">${formatCurrency(tx.running_balance)}</td>
+              <td class="p-4"><span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">${tx.status}</span></td>
+            </tr>
+          `).join('');
+        } else {
+          tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-500">No transactions recorded for this account.</td></tr>';
+        }
+      } catch (err) {
+        showNotice(err.message, true);
+      }
+    }
+
+    async function downloadStatement() {
+      if (!currentAccountId) return;
+      try {
+        const stmt = await BankingAPI.getAccountStatement(currentAccountId);
+        showNotice(`Statement generated for ${stmt.account_name} (${stmt.statement_period}) - Total Transactions: ${stmt.total_transactions}`);
+      } catch (err) {
+        showNotice(err.message, true);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', initAccountsPage);
+  </script>
+</body>
+</html>

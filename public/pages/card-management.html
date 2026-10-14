@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Card Controls & Management — Enterprise Digital Banking</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <header class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
+    <div class="flex items-center space-x-6">
+      <a href="/index.html" class="flex items-center space-x-2">
+        <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold">DB</div>
+        <span class="font-bold text-lg text-slate-900">Digital Banking</span>
+      </a>
+      <nav class="hidden md:flex space-x-4">
+        <a href="/pages/dashboard.html" class="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900">Dashboard</a>
+        <a href="/pages/account-details.html" class="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900">Accounts</a>
+        <a href="/pages/fund-transfer.html" class="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900">Transfers</a>
+        <a href="/pages/card-management.html" class="px-3 py-2 text-sm font-semibold text-blue-600 border-b-2 border-blue-600">Cards</a>
+      </nav>
+    </div>
+    <div class="flex items-center space-x-4">
+      <span class="text-sm font-medium text-slate-700">Jane Doe (Executive)</span>
+      <a href="/pages/login.html" class="text-xs text-red-600 hover:underline">Sign Out</a>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-8">
+    <div class="mb-6 flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900">Card Controls & Lifecycle Management</h1>
+        <p class="text-sm text-slate-500">One-tap locking/unlocking and dynamic spending limit controls (REQ-F-007)</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <!-- Cards List -->
+      <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm">
+        <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+          <h2 class="text-lg font-bold text-slate-900">Registered Corporate Cards</h2>
+          <span class="text-xs bg-slate-100 text-slate-700 px-3 py-1 rounded-full font-medium">PCI-DSS Tokenized</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase bg-slate-50">
+                <th class="p-4">Cardholder</th>
+                <th class="p-4">Card Number</th>
+                <th class="p-4">Type</th>
+                <th class="p-4">Status</th>
+                <th class="p-4">Monthly Limit</th>
+                <th class="p-4">Action</th>
+              </tr>
+            </thead>
+            <tbody id="cards-table-body" class="divide-y divide-slate-100 text-sm">
+              <tr><td colspan="6" class="p-4 text-center text-slate-500">Loading cards...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Limit Management Widget -->
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <h2 class="text-lg font-bold text-slate-900 mb-4">Update Spending Limits</h2>
+        <form id="limits-form" onsubmit="handleLimitUpdate(event)">
+          <div class="form-group">
+            <label for="limitCardSelect">Select Card</label>
+            <select id="limitCardSelect" class="form-control" onchange="populateLimitInputs()">
+              <!-- Rendered dynamically -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="monthly-limit">Monthly Limit (USD)</label>
+            <input type="number" id="monthly-limit" min="100" step="100" class="form-control" required>
+          </div>
+
+          <div class="form-group">
+            <label for="pos-limit">Single POS Transaction Limit (USD)</label>
+            <input type="number" id="pos-limit" min="50" step="50" class="form-control" required>
+          </div>
+
+          <button type="submit" id="btn-update-limits" class="w-full btn btn-primary mt-2">
+            Update Limits
+          </button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    let cardsData = [];
+
+    async function initCardsPage() {
+      try {
+        cardsData = await BankingAPI.getCards();
+        renderCardsTable();
+        populateCardsDropdown();
+      } catch (err) {
+        showNotice(err.message, true);
+      }
+    }
+
+    function renderCardsTable() {
+      const tbody = document.getElementById('cards-table-body');
+      if (cardsData.length > 0) {
+        tbody.innerHTML = cardsData.map(c => `
+          <tr class="hover:bg-slate-50">
+            <td class="p-4 font-bold text-slate-900">${c.card_holder}</td>
+            <td class="p-4 font-mono text-slate-700">${c.card_number_masked}</td>
+            <td class="p-4 text-slate-600 text-xs">${c.card_type} (Exp ${c.expiry_date})</td>
+            <td class="p-4">
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold ${c.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                ${c.status}
+              </span>
+            </td>
+            <td class="p-4 font-semibold text-slate-900">${formatCurrency(c.monthly_limit)}</td>
+            <td class="p-4">
+              <button onclick="toggleLock('${c.id}', '${c.status}')" class="px-3 py-1 rounded text-xs font-semibold ${c.status === 'ACTIVE' ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'}">
+                ${c.status === 'ACTIVE' ? '🔒 Lock Card' : '🔓 Unlock Card'}
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } else {
+        tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-500">No cards registered.</td></tr>';
+      }
+    }
+
+    function populateCardsDropdown() {
+      const select = document.getElementById('limitCardSelect');
+      select.innerHTML = cardsData.map(c => `
+        <option value="${c.id}">${c.card_holder} (${c.card_number_masked})</option>
+      `).join('');
+      populateLimitInputs();
+    }
+
+    function populateLimitInputs() {
+      const selectId = document.getElementById('limitCardSelect').value;
+      const card = cardsData.find(c => c.id === selectId);
+      if (card) {
+        document.getElementById('monthly-limit').value = card.monthly_limit;
+        document.getElementById('pos-limit').value = card.pos_limit;
+      }
+    }
+
+    async function toggleLock(cardId, currentStatus) {
+      const nextStatus = currentStatus === 'ACTIVE' ? 'LOCKED' : 'ACTIVE';
+      try {
+        const res = await BankingAPI.toggleCardStatus(cardId, nextStatus);
+        showNotice(res.message);
+        await initCardsPage();
+      } catch (err) {
+        showNotice(err.message, true);
+      }
+    }
+
+    async function handleLimitUpdate(e) {
+      e.preventDefault();
+      const cardId = document.getElementById('limitCardSelect').value;
+      const monthly = document.getElementById('monthly-limit').value;
+      const pos = document.getElementById('pos-limit').value;
+
+      try {
+        const res = await BankingAPI.updateCardLimits(cardId, monthly, pos);
+        showNotice(res.message);
+        await initCardsPage();
+      } catch (err) {
+        showNotice(err.message, true);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', initCardsPage);
+  </script>
+</body>
+</html>
