@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Domestic Fund Transfers — Enterprise Digital Banking</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <header class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-50">
+    <div class="flex items-center space-x-6">
+      <a href="/index.html" class="flex items-center space-x-2">
+        <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold">DB</div>
+        <span class="font-bold text-lg text-slate-900">Digital Banking</span>
+      </a>
+      <nav class="hidden md:flex space-x-4">
+        <a href="/pages/dashboard.html" class="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900">Dashboard</a>
+        <a href="/pages/account-details.html" class="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900">Accounts</a>
+        <a href="/pages/fund-transfer.html" class="px-3 py-2 text-sm font-semibold text-blue-600 border-b-2 border-blue-600">Transfers</a>
+        <a href="/pages/card-management.html" class="px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900">Cards</a>
+      </nav>
+    </div>
+    <div class="flex items-center space-x-4">
+      <span class="text-sm font-medium text-slate-700">Jane Doe (Executive)</span>
+      <a href="/pages/login.html" class="text-xs text-red-600 hover:underline">Sign Out</a>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-8">
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-slate-900">Domestic Fund Transfers</h1>
+      <p class="text-sm text-slate-500">Initiate Domestic Fund Transfers: Internal A2A, ACH, Wire, and Real-Time Payments (REQ-F-006)</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <!-- Transfer Form -->
+      <div class="lg:col-span-1 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <h2 class="text-lg font-bold text-slate-900 mb-4">New Transfer</h2>
+        <form id="transfer-form" onsubmit="handleTransferSubmit(event)">
+          <div class="form-group">
+            <label for="fromAccount">Source Account</label>
+            <select id="fromAccount" required class="form-control">
+              <!-- Rendered dynamically -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="toAccount">Destination Account</label>
+            <select id="toAccount" required class="form-control">
+              <!-- Rendered dynamically -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="transferType">Payment Rail / Method</label>
+            <select id="transferType" class="form-control">
+              <option value="Internal Transfer">Internal Account-to-Account (Instant)</option>
+              <option value="ACH">Domestic ACH (Same-Day)</option>
+              <option value="Domestic Wire">Fedwire Settlement</option>
+              <option value="RTP">Real-Time Payment (RTP Network)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="amount">Amount (USD)</label>
+            <input type="number" id="amount" step="0.01" min="1" placeholder="0.00" required class="form-control">
+          </div>
+
+          <div class="form-group">
+            <label for="memo">Memo / Remittance Info</label>
+            <input type="text" id="memo" placeholder="e.g. Invoice #2026-99" class="form-control">
+          </div>
+
+          <button type="submit" id="btn-submit-transfer" class="w-full btn btn-primary mt-2">
+            Initiate Transfer
+          </button>
+        </form>
+      </div>
+
+      <!-- Pending & Recent Transfers List -->
+      <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm">
+        <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+          <h2 class="text-lg font-bold text-slate-900">Transfer Activity Log</h2>
+          <span class="text-xs bg-slate-100 text-slate-700 px-3 py-1 rounded-full font-medium">Idempotent</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase bg-slate-50">
+                <th class="p-4">Reference</th>
+                <th class="p-4">Type</th>
+                <th class="p-4">Amount</th>
+                <th class="p-4">Memo</th>
+                <th class="p-4">Status</th>
+                <th class="p-4">Created At</th>
+              </tr>
+            </thead>
+            <tbody id="transfers-table-body" class="divide-y divide-slate-100 text-sm">
+              <tr><td colspan="6" class="p-4 text-center text-slate-500">Loading transfers...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    async function initTransferPage() {
+      try {
+        const accountsData = await BankingAPI.getAccounts();
+        const fromSelect = document.getElementById('fromAccount');
+        const toSelect = document.getElementById('toAccount');
+
+        fromSelect.innerHTML = accountsData.accounts.map(acc => `
+          <option value="${acc.id}">${acc.account_name} (${formatCurrency(acc.available_balance)})</option>
+        `).join('');
+
+        toSelect.innerHTML = accountsData.accounts.map((acc, idx) => `
+          <option value="${acc.id}" ${idx === 1 ? 'selected' : ''}>${acc.account_name} (${acc.account_number})</option>
+        `).join('');
+
+        await loadTransfersList();
+      } catch (err) {
+        showNotice(err.message, true);
+      }
+    }
+
+    async function loadTransfersList() {
+      try {
+        const data = await BankingAPI.getTransfers();
+        const tbody = document.getElementById('transfers-table-body');
+        if (data.transfers && data.transfers.length > 0) {
+          tbody.innerHTML = data.transfers.map(tr => `
+            <tr class="hover:bg-slate-50">
+              <td class="p-4 font-mono text-xs font-bold text-slate-900">${tr.reference_number}</td>
+              <td class="p-4 font-medium text-slate-800">${tr.transfer_type}</td>
+              <td class="p-4 font-bold text-slate-900">${formatCurrency(tr.amount)}</td>
+              <td class="p-4 text-slate-600 text-xs">${tr.memo || '—'}</td>
+              <td class="p-4"><span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">${tr.status}</span></td>
+              <td class="p-4 text-slate-500 text-xs">${tr.created_at}</td>
+            </tr>
+          `).join('');
+        } else {
+          tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-500">No transfers executed yet.</td></tr>';
+        }
+      } catch (err) {
+        showNotice(err.message, true);
+      }
+    }
+
+    async function handleTransferSubmit(e) {
+      e.preventDefault();
+      const fromAcc = document.getElementById('fromAccount').value;
+      const toAcc = document.getElementById('toAccount').value;
+      const type = document.getElementById('transferType').value;
+      const amount = document.getElementById('amount').value;
+      const memo = document.getElementById('memo').value;
+
+      if (fromAcc === toAcc) {
+        showNotice('Source and Destination accounts cannot be identical', true);
+        return;
+      }
+
+      const btn = document.getElementById('btn-submit-transfer');
+      btn.disabled = true;
+      btn.textContent = 'Processing Transfer...';
+
+      try {
+        const result = await BankingAPI.initiateTransfer(fromAcc, toAcc, amount, type, memo);
+        showNotice(`Transfer successful! Ref: ${result.reference_number}`);
+        document.getElementById('amount').value = '';
+        document.getElementById('memo').value = '';
+        await initTransferPage();
+      } catch (err) {
+        showNotice(err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Initiate Transfer';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', initTransferPage);
+  </script>
+</body>
+</html>
